@@ -1,7 +1,7 @@
 #!/bin/bash
 
 BUFF_SIZE=256 #Must be a power of 2. Normal values are 128, 256. 512 is possible on a fast PC.
-IPADDR="0.0.0.0"
+#IPADDR="0.0.0.0"
 IPPORT="8081"
 
 # set to /dev/null for no logging, set to some file for logfile. You can also set it to the same file. 
@@ -22,19 +22,19 @@ FORCE_KILL="yes"
 ### Uncomment the following section to automatically get the IP address from interface wlan0 ###
 ### Don't forget to comment out "IPADDR="0.0.0.0" ###
 
-# IPADDR=$(ip addr show wlan0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)
-# while [ "$IPADDR" == "" ] || [ "$IPADDR" == "169.254.*" ]
-# do
-# sleep 1
-# echo "waiting for network"
-# IPADDR=$(ip addr show wlan0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)
-# echo $IPADDR
-# done
+IPADDR=$(ip addr show wlan0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)
+while [ "$IPADDR" == "" ] || [ "$IPADDR" == "169.254.*" ]
+do
+sleep 1
+echo "waiting for network"
+IPADDR=$(ip addr show wlan0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)
+echo $IPADDR
+done
 
 ### End of Section ###
 
 # Useful to set this on low power ARM devices
-#sudo cpufreq-set -g performance
+sudo cpufreq-set -g performance
 
 # Set for RPI3 with heatsink/fan
 #sudo cpufreq-set -d 1.4GHz
@@ -87,8 +87,8 @@ done
 
 
 # Enable on the Pi 3 to prevent the internet from hogging the USB bandwidth
-#sudo wondershaper wlan0 3000 3000
-#sudo wondershaper eth0 3000 3000
+sudo wondershaper wlan0 3000 3000
+sudo wondershaper eth0 3000 3000
 
 sleep 1
 
