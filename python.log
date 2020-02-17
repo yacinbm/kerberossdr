@@ -1,0 +1,8 @@
+/usr/lib/python3/dist-packages/scipy/stats/stats.py:1713: FutureWarning: Using a non-tuple sequence for multidimensional indexing is deprecated; use `arr[tuple(seq)]` instead of `arr[seq]`. In the future this will be interpreted as an array index, `arr[np.array(seq)]`, which will result either in an error or a different result.
+  return np.add.reduce(sorted[indexer] * weights, axis=axis) / sumval
+Traceback (most recent call last):
+  File "_GUI/hydra_main_window.py", line 780, in DOA_plot
+    self.DOA_res_fd.seek(0)
+ValueError: I/O operation on closed file.
+serving on http://192.168.86.209:8080
+[ INFO ] Python rec: FIFOs are closed

@@ -8,12 +8,12 @@ IPPORT="8081"
 #RTLDAQLOG="rtl_daq.log"
 #SYNCLOG="sync.log"
 #GATELOG="gate.log"
-#PYTHONLOG="python.log"
+PYTHONLOG="python.log"
 
 RTLDAQLOG="/dev/null"
 SYNCLOG="/dev/null"
 GATELOG="/dev/null"
-PYTHONLOG="/dev/null"
+#PYTHONLOG="/dev/null"
 
 # If you want to kill all matching processes on startup without prompt. Otherwise, set it to anything else. 
 FORCE_KILL="yes"

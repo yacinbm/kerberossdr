@@ -30,6 +30,20 @@ from bottle import route, run, request, get, post, redirect, template, static_fi
 import threading
 import subprocess
 import save_settings as settings
+import xml.etree.ElementTree as ET
+gpio_error = None
+try:
+    import RPi.GPIO as GPIO
+    GPIO.setwarnings(False)
+    GPIO.setmode(GPIO.BOARD)
+    ant_control_pins = (16,18)
+    GPIO.setup(ant_control_pins, GPIO.OUT)
+
+    #Ant 1 Enabled
+    GPIO.output(ant_control_pins, (GPIO.HIGH, GPIO.LOW))
+except ModuleNotFoundError as e:
+    gpio_error = e
+    print("Cannot import GPIO. Maybe not on a pi?")
 
 np.seterr(divide='ignore')
 
@@ -343,8 +357,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def set_sync_params(self):
         if self.checkBox_en_sync_display.checkState():
+            #Ant 1 Disabled
+            try:
+                #GPIO.output(ant_control_pins, (GPIO.LOW, GPIO.LOW))
+                GPIO.output(ant_control_pins, (GPIO.LOW, GPIO.HIGH))
+            except:
+                pass
             self.module_signal_processor.en_sync = True
         else:
+            #Ant 1 Enabled
+            try:
+                GPIO.output(ant_control_pins, (GPIO.HIGH, GPIO.LOW))
+            except:
+                pass
             self.module_signal_processor.en_sync = False
     def set_spectrum_params(self):
         if self.checkBox_en_spectrum.checkState():
