@@ -8,12 +8,12 @@ IPPORT="8081"
 #RTLDAQLOG="rtl_daq.log"
 #SYNCLOG="sync.log"
 #GATELOG="gate.log"
-PYTHONLOG="python.log"
+#PYTHONLOG="python.log"
 
 RTLDAQLOG="/dev/null"
 SYNCLOG="/dev/null"
 GATELOG="/dev/null"
-#PYTHONLOG="/dev/null"
+PYTHONLOG="/dev/null"
 
 # If you want to kill all matching processes on startup without prompt. Otherwise, set it to anything else. 
 FORCE_KILL="yes"
@@ -109,9 +109,9 @@ mkfifo _receiver/C/rec_control_fifo
 # Start programs at realtime priority levels
 curr_user=$(whoami)
 
-sudo chrt -r 50 ionice -c 1 -n 0 ./_receiver/C/rtl_daq $BUFF_SIZE 2>$RTLDAQLOG 1| \
-	sudo chrt -r 50 ./_receiver/C/sync $BUFF_SIZE 2>$SYNCLOG 1| \
-	sudo chrt -r 50 ./_receiver/C/gate $BUFF_SIZE 2>$GATELOG 1| \
+sudo chrt -r 50 taskset -c 3 ionice -c 1 -n 0 ./_receiver/C/rtl_daq $BUFF_SIZE 2>$RTLDAQLOG 1| \
+	sudo chrt -r 50 taskset -c 3 ./_receiver/C/sync $BUFF_SIZE 2>$SYNCLOG 1| \
+	sudo chrt -r 50 taskset -c 3 ./_receiver/C/gate $BUFF_SIZE 2>$GATELOG 1| \
 	sudo nice -n -20 sudo -u $curr_user python3 -O _GUI/hydra_main_window.py $BUFF_SIZE $IPADDR &>$PYTHONLOG &
 
 # Start PHP webserver which serves the updating images
