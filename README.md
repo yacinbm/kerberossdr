@@ -1,3 +1,7 @@
+<h4>Ubuntu 20.04 Users NOTE:</h4>
+
+Note that on Ubuntu 20.04 or newer PyQt4 is no longer available. A contributor has created his own modification to the code which uses PyQt5. You can try it at this link https://github.com/rfjohnso/kerberossdr
+
 <h4>Change Log</h4>
 
 * Selecting “Uniform Gain” will allow you to set the same gain value for all four receivers.
