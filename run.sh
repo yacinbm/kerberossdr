@@ -110,6 +110,20 @@ mkfifo _receiver/C/rec_control_fifo
 # Start programs at realtime priority levels
 curr_user=$(whoami)
 
+# chrt: Set round robin scheduling, with scheduling priority of 50
+# taskset: Set the last CPU core for our process
+# ionice: Set the IO scheduling class and priority to real-time and most important "0"
+# --> Do all of this for the process rtl_daq with arg $BUFF_SIZE
+# Redirect stderr (2>) to the file in question
+
+# For GUI, start the gui as most prioritary process and redirect both STDERR and STDOUT to &PYTHONLOG
+
+# The program function as follows:
+# The rtl_daq is in charge of capturing data from the RTL_SDR itself using the libusb library. Once it has read
+# the data from the SDR, it sends the same data buffer to the next "module" which is sync via the stdout (using 1|).
+# You can interface with the rtl_daq module by writing to its FIFO. 
+# 
+
 sudo chrt -r 50 taskset -c $NPROC ionice -c 1 -n 0 ./_receiver/C/rtl_daq $BUFF_SIZE 2>$RTLDAQLOG 1| \
 	sudo chrt -r 50 taskset -c $NPROC ./_receiver/C/sync $BUFF_SIZE 2>$SYNCLOG 1| \
 	sudo chrt -r 50 taskset -c $NPROC ./_receiver/C/gate $BUFF_SIZE 2>$GATELOG 1| \
