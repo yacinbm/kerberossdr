@@ -24,13 +24,11 @@
 #include <semaphore.h>
 #include "sync.h"
 
-//2097152 - Buff size for real work
-//#define BUFFER_SIZE 128 * 1024 //128*1024 // Sample 
 #define BUFFER_NO 2  // Buffer number
 #define CHANNEL_NO 4 // Channel number
 #define CFN "_receiver/C/sync_control_fifo" // Name of the gate control fifo - Control FIFO name
 
-int BUFFER_SIZE = 0;
+int BUFFER_SIZE;
 
 /*
  *  Signal definitions: 
@@ -60,6 +58,7 @@ void * fifo_read_tf(void* arg)
     uint8_t signal;
     while(1){
         fread(&signal, sizeof(signal), 1, fd);
+
         if( (uint8_t) signal == 1)
         {
             fprintf(stderr,"Signal1: trigger\n");
@@ -74,21 +73,22 @@ void * fifo_read_tf(void* arg)
         }
         else if( (char) signal == 'd')
         {
-            //fprintf(stderr,"Signal 'd': Updating delay values \n");
+            fprintf(stderr,"Signal 'd': Updating delay values \n");
             fread(delays, sizeof(*delays), 4, fd);
             for(int m=0; m < CHANNEL_NO; m++)     
                 if(abs(delays[m]) < BUFFER_SIZE)
                 {
-                    //fprintf(stderr,"[ INFO ] Channel %d, delay value %d\n",m,delays[m]);
+                    fprintf(stderr,"[ INFO ] Channel %d, delay value %d\n",m,delays[m]);
                     delays[m] *=2; // I and Q !
                 }
                 else
                 {
-                    //fprintf(stderr,"[ ERROR ] Delay value over buffer size: %d, Setting to zero\n",delays[m]);
+                    fprintf(stderr,"[ ERROR ] Delay value over buffer size: %d, Setting to zero\n",delays[m]);
                     delays[m] = 0;
-                    //fprintf(stderr,"[ WARNING ]Channel %d, delay value %d\n",m,delays[m]);
+                    fprintf(stderr,"[ WARNING ]Channel %d, delay value %d\n",m,delays[m]);
                 }
-            trigger++; // Set trigger for updating delay values
+            // Set trigger for updating delay values
+            trigger++; 
             sem_wait(&trigger_sem);          
 
         }
@@ -99,11 +99,8 @@ void * fifo_read_tf(void* arg)
 
 
 int main(int argc, char** argv)
-{    
-
-    //static char buf[262144 * 4 * 30];
-    //setvbuf(stdout, buf, _IOFBF, sizeof(buf));
-
+{
+    // Get buffer size from args
     BUFFER_SIZE = (atoi(argv[1])/2) * 1024;
 
     int read_size; // Stores the read bytes from stdin
@@ -126,7 +123,7 @@ int main(int argc, char** argv)
     {
         (sync_buffers + m * sizeof(*sync_buffers))->circ_buffer = malloc(BUFFER_NO*BUFFER_SIZE*2*sizeof(uint8_t)); // *2-> I and Q    
         (sync_buffers + m * sizeof(*sync_buffers))->delay = BUFFER_SIZE;//BUFFER_SIZE/2;  
-        //fprintf(stderr,"ch: %d, Buff pointer: %p\n",m,(sync_buffers + m * sizeof(*sync_buffers))->circ_buffer);
+        fprintf(stderr,"ch: %d, Buff pointer: %p\n",m,(sync_buffers + m * sizeof(*sync_buffers))->circ_buffer);
     }
     
     fprintf(stderr,"Start delay sync test\n");
@@ -144,7 +141,7 @@ int main(int argc, char** argv)
             read_size = fread((sync_buffers + m * sizeof(*sync_buffers))->circ_buffer +(BUFFER_SIZE*2*write_index)*sizeof(uint8_t), sizeof(uint8_t), (BUFFER_SIZE*2), stdin);                
             if(read_size == 0)
             {
-                //fprintf(stderr,"Read error at channel: %d, wr_index: %d\n",m, write_index);
+                fprintf(stderr,"Read error at channel: %d, wr_index: %d\n",m, write_index);
                 exit_flag = 1;
                 break;
             }
@@ -175,8 +172,8 @@ int main(int argc, char** argv)
                 first_read ++; 
                 
             /* Log */                
-            //fprintf(stderr,"Channel: %d, wr_index: %d\n",m,write_index);
-            //fprintf(stderr,"Delay %d\n", delay);
+            fprintf(stderr,"Channel: %d, wr_index: %d\n",m,write_index);
+            fprintf(stderr,"Delay %d\n", delay);
                 
 
         }

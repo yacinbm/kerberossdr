@@ -23,13 +23,9 @@
 #include <pthread.h>
 #include <semaphore.h>
 
-
-//#define BUFFER_SIZE 1024 * 128 * 4//1024*256*4
 #define CFN "_receiver/C/gate_control_fifo" // Name of the gate control fifo - Control FIFO name
 
-//#define BUFFER_SIZE 256 * 1024 * 4
-
-int BUFFER_SIZE = 0;
+int BUFFER_SIZE;
 
 static sem_t trigger_sem;
 static volatile int trigger=0, exit_flag=0;
@@ -50,7 +46,7 @@ void * fifo_read_tf(void* arg)
         fread(&trigger_read, sizeof(trigger_read), 1, fd);
         if( (uint8_t) trigger_read == 1)
         {
-            //fprintf(stderr,"Trigger received\n");
+            fprintf(stderr,"Trigger received\n");
             trigger++;
             sem_wait(&trigger_sem);          
         }            
@@ -68,11 +64,7 @@ void * fifo_read_tf(void* arg)
 
 int main(int argc, char** argv)
 {
-
-    //static char buf[262144 * 4 * 30];
-    //setvbuf(stdout, buf, _IOFBF, sizeof(buf));
-
-
+    // Get buffer from args
     BUFFER_SIZE = atoi(argv[1]) * 1024 * 4;
 
     int read_size;
@@ -82,18 +74,17 @@ int main(int argc, char** argv)
     pthread_create(&fifo_read_thread, NULL, fifo_read_tf, NULL);
     
     // Allocate sample buffer
-   // uint8_t buffer[BUFFER_SIZE];
     buffer= malloc(BUFFER_SIZE*sizeof(uint8_t));
 
     fprintf(stderr,"Start gate control\n");    
     while(1)
     {        
+        // Break if stdout of previous pipe is closed()
         if(feof(stdin))
             break;
         
         read_size = fread(buffer,sizeof(*buffer), BUFFER_SIZE, stdin);
-
-        //read_size = read(STDIN_FILENO, buffer, BUFFER_SIZE);        
+   
         if(read_size>0)
         {
             if(trigger == 1)
@@ -106,7 +97,7 @@ int main(int argc, char** argv)
             }            
             else
             {
-                //fprintf(stderr,"No trigger, dropping %d samples..\n", read_size);
+                fprintf(stderr,"No trigger, dropping %d samples..\n", read_size);
             }
             
             if(exit_flag)

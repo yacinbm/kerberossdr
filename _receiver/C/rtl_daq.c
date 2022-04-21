@@ -71,7 +71,7 @@ pthread_mutex_t fifo_mutex;
 pthread_cond_t buff_ind_cond;
 pthread_t fifo_read_thread;
 
-int reconfig_trigger=0, exit_flag=0;
+int exit_flag=0;
 int noise_source_state = 0;
 int last_noise_source_state = 0;
 
@@ -106,25 +106,19 @@ void * fifo_read_tf(void* arg)
     else
         fprintf(stderr,"FIFO open error\n");
     while(!exit_flag){
-        fread(&signal, sizeof(signal), 1, fd);
-        //pthread_mutex_lock(&buff_ind_mutex);    
-    
-
-
+        // Get the data from the control FIFO
+        fread(&signal, sizeof(signal), 1, fd);  
+        
         if( (uint8_t) signal == 2)
         {            
-            //fprintf(stderr,"Signal2: FIFO read thread exiting \n");
+            fprintf(stderr,"Signal2: FIFO read thread exiting \n");
             exit_flag = 1;           
-        }
-        else
-        {            
-            reconfig_trigger=1;
         }
 
 
         if( (char) signal == 'r')
         {
-            //fprintf(stderr,"Signal 'r': Reconfiguring tuner \n");
+            fprintf(stderr,"Signal 'r': Reconfiguring tuner \n");
             fread(&center_freq_read, sizeof(uint32_t), 1, fd);
             fread(&sample_rate_read, sizeof(uint32_t), 1, fd);
             fread(&gain_read, sizeof(int), 1, fd);
@@ -138,9 +132,9 @@ void * fifo_read_tf(void* arg)
             gain_read_array[2] = gain_read_3;
             gain_read_array[3] = gain_read_4;
             
-            //fprintf(stderr,"[ INFO ] Center freq: %u MHz\n", ((unsigned int) center_freq_read/1000000));
-            //fprintf(stderr,"[ INFO ] Sample rate: %u MSps\n", ((unsigned int) sample_rate_read/1000000));
-            //fprintf(stderr,"[ INFO ] Gain: %d dB\n",(gain_read/10));
+            fprintf(stderr,"[ INFO ] Center freq: %u MHz\n", ((unsigned int) center_freq_read/1000000));
+            fprintf(stderr,"[ INFO ] Sample rate: %u MSps\n", ((unsigned int) sample_rate_read/1000000));
+            fprintf(stderr,"[ INFO ] Gain: %d dB\n",(gain_read/10));
             
             for(int i=0; i<NUM_CH; i++)
             {              
@@ -155,15 +149,12 @@ void * fifo_read_tf(void* arg)
                 {
                     fprintf(stderr, "[ ERROR ]  Async read stop failed: %s\n", strerror(errno));                
                 }
-                //fprintf(stderr, "[ INFO ] Async read stopped at device:%d\n",i);
+                fprintf(stderr, "[ INFO ] Async read stopped at device:%d\n",i);
             }
-
-
-
         }
-	else if ( (char) signal == 'n')
+	    else if ( (char) signal == 'n')
         {
-            //fprintf(stderr,"Signal 'n': Turn on noise source \n");            
+            fprintf(stderr,"Signal 'n': Turn on noise source \n");            
             noise_source_state = 1;
 	    reconfig_trigger = 0;
 
@@ -172,15 +163,12 @@ void * fifo_read_tf(void* arg)
         }
         else if ( (char) signal == 'f')
         {
-            //fprintf(stderr,"Signal 'f': Turn off noise source \n");            
+            fprintf(stderr,"Signal 'f': Turn off noise source \n");            
             noise_source_state = 0;
             reconfig_trigger = 0;
             rtlsdr_set_gpio(rtl_receivers[0].dev, 0, 0);
 
         }
-  
-        //pthread_cond_signal(&buff_ind_cond);
-        //pthread_mutex_unlock(&buff_ind_mutex);
     }
     fclose(fd);
     return NULL;
@@ -189,24 +177,15 @@ void * fifo_read_tf(void* arg)
 
 void rtlsdrCallback(unsigned char *buf, uint32_t len, void *ctx)
 {
-        //pthread_mutex_lock(&buff_ind_mutex);
-
         struct rtl_rec_struct *rtl_rec = (struct rtl_rec_struct *) ctx;// Set the receiver's structure
-
-        /*if (len != BUFF_LEN)
-        {
-            fprintf(stderr, "[ DEBUG ] Len greather than BUFF_LEN\n");
-            len = BUFF_LEN;   
-        }*/
     
         writeOrder[rtl_rec->dev_ind] = true;
     	memcpy(rtl_rec->buffer, buf, len);
-        //fprintf(stderr, "Read_buff_ind:%d, rtl_recbuff_ind:%d\n",rtl_rec->buff_ind, rtl_rec->buff_ind);
+        fprintf(stderr, "Read_buff_ind:%d\n",rtl_rec->buff_ind);
         if(writeOrder[0] && writeOrder[1] && writeOrder[2] && writeOrder[3])
         {
            pthread_cond_signal(&buff_ind_cond);
         }
-        //pthread_mutex_unlock(&buff_ind_mutex);
 }
 
 
@@ -214,9 +193,9 @@ void rtlsdrCallback(unsigned char *buf, uint32_t len, void *ctx)
 void *read_thread_entry(void *arg)
 {
 
-    //fprintf(stderr, "[ DEBUG ] Pointer value %p\n", arg);
+    fprintf(stderr, "[ DEBUG ] Pointer value %p\n", arg);
     struct rtl_rec_struct *rtl_rec = (struct rtl_rec_struct *) arg;// Set the thread's own receiver structure   
-    //fprintf(stderr, "[ INFO ] Initializing RTL-SDR device, index:%d\n", rtl_rec->dev_ind);   
+    fprintf(stderr, "[ INFO ] Initializing RTL-SDR device, index:%d\n", rtl_rec->dev_ind);   
    
     rtlsdr_dev_t *dev = NULL;
    
@@ -237,8 +216,6 @@ void *read_thread_entry(void *arg)
     
     while(!exit_flag)
     {
-   
-        //CHECK1(rtlsdr_set_testmode(dev, 1)); // Set this to enable test mode
         if (rtlsdr_set_center_freq(dev, rtl_rec->center_freq) !=0)
         {
             fprintf(stderr, "[ ERROR ] Failed to set center frequency: %s\n", strerror(errno));
@@ -252,9 +229,8 @@ void *read_thread_entry(void *arg)
         {
             fprintf(stderr, "[ ERROR ] Failed to set sample rate: %s\n", strerror(errno));
         }
-        //fprintf(stderr, "[ DONE ] Device is initialized %d\n", rtl_rec->dev_ind);
-        rtlsdr_read_async(dev, rtlsdrCallback, rtl_rec, ASYNC_BUF_NUMBER, BUFF_LEN);       
-    
+        fprintf(stderr, "[ DONE ] Device is initialized %d\n", rtl_rec->dev_ind);
+        rtlsdr_read_async(dev, rtlsdrCallback, rtl_rec, ASYNC_BUF_NUMBER, BUFF_LEN); // Blocking call until rtlsdr is canceled or crashes
     }
     
     
@@ -265,9 +241,6 @@ return NULL;
 
 int main( int argc, char** argv )
 {
-    //static char buf[262144 * 4 * 30];
-
-    //setvbuf(stdout, NULL, _IOFBF, 0);
     fprintf(stderr, "[ INFO ] Starting multichannel coherent RTL-SDR receiver\n");
 
 
@@ -297,7 +270,6 @@ int main( int argc, char** argv )
         rtl_rec->center_freq = CENTER_FREQ;
         rtl_rec->sample_rate = SAMPLE_RATE;
         rtl_rec->buffer = malloc(NUM_BUFF * BUFF_LEN * sizeof(uint8_t));
-	//rtlsdr_set_gpio(rtl_rec->dev, 0, 0);
       
         if(! rtl_rec->buffer)
         {
@@ -309,7 +281,7 @@ int main( int argc, char** argv )
     pthread_mutex_init(&buff_ind_mutex, NULL);
     pthread_cond_init(&buff_ind_cond, NULL); 
 
-    // we're going to test the "data_ready, exit_flag and reconfig_trigger" so we need the mutex for safety
+    // Need mutex to get access to the devices
     pthread_mutex_lock(&buff_ind_mutex);
 
    
@@ -320,131 +292,62 @@ int main( int argc, char** argv )
    
     	if (rtlsdr_open(&dev, rtl_rec->dev_ind) !=0)
     	{
-       		//fprintf(stderr, "[ ERROR ] Failed to open RTL-SDR device: %s\n", strerror(errno));
+       		fprintf(stderr, "[ ERROR ] Failed to open RTL-SDR device: %s\n", strerror(errno));
     	}
     	rtl_rec->dev = dev;
     }
-
-/*
-    for(int i=0; i<NUM_CH; i++)
-    {
-    	struct rtl_rec_struct *rtl_rec = &rtl_receivers[i];// Set the thread's own receiver structure      
-   
-    	if (rtlsdr_init(rtl_rec->dev) !=0)
-    	{
-       		//fprintf(stderr, "[ ERROR ] Failed to open RTL-SDR device: %s\n", strerror(errno));
-    	}
-    }
-*/
 
     int rc;
     pthread_attr_t attr;
     struct sched_param param;
     rc = pthread_attr_init (&attr);
     rc = pthread_attr_getschedparam(&attr, &param);
-    //rc = pthread_attr_setschedpolicy(&attr, SCHED_RR);
-
     
     // Spawn reader threads
     for(int i=0; i<NUM_CH; i++)
-    {       
-        //(param.sched_priority)++;
+    {
         rc = pthread_attr_setschedparam(&attr, &param);
         pthread_create(&rtl_receivers[i].async_read_thread, &attr, read_thread_entry, &rtl_receivers[i]);           
     }
 
     // Spawn control thread
     pthread_create(&fifo_read_thread, NULL, fifo_read_tf, NULL);
-   
-     
-  //unsigned long long read_buff_ind = 0;
-  int data_ready = 1;
-  struct rtl_rec_struct *rtl_rec;
-  
-  
 
-  while( !exit_flag )
-  {  
-     
-      /* block this thread until another thread signals cond. While
-      blocked, the mutex is released, then re-aquired before this
-      thread is woken up and the call returns. */
-      pthread_cond_wait( &buff_ind_cond, &buff_ind_mutex);
+    struct rtl_rec_struct *rtl_rec;
+    while( !exit_flag ){  
+        
+        /* block this thread until another thread signals cond. While
+        blocked, the mutex is released, then re-aquired before this
+        thread is woken up and the call returns. */
+        pthread_cond_wait( &buff_ind_cond, &buff_ind_mutex);
+        for(int i=0; i < NUM_CH; i++)
+        {
+            writeOrder[i] = false;
 
-      //data_ready = 0;
-      // Do we have new data ready for the processing?
-
-      //if(writeOrder[0] && writeOrder[1] && writeOrder[2] && writeOrder[3])
-      //{
-          //fprintf(stderr, "[ INFO ] Writing data to stdout, buff ind:%lld \n",read_buff_ind);
-
-          /*if (last_noise_source_state != noise_source_state)
-          {
-              rtl_rec = &rtl_receivers[0];
-              if (noise_source_state == 1)
-                  rtlsdr_set_gpio(rtl_rec->dev, 1, 0);
-	      else if (noise_source_state == 0)
-	          rtlsdr_set_gpio(rtl_rec->dev, 0, 0);
-          }
-
-          last_noise_source_state = noise_source_state;*/
-          //Adding a delay seems to help stop problems with the sync being lost
-          //usleep(1000000);
-
-          for(int i=0; i < NUM_CH; i++)
-          {
-              writeOrder[i] = false;
-
-              rtl_rec = &rtl_receivers[i];
-              fwrite(rtl_rec->buffer, BUFF_LEN, 1, stdout);
-              fflush(stdout);
-          }
-          /*writeOrder[0] = false;
-          writeOrder[1] = false;
-          writeOrder[2] = false;
-          writeOrder[3] = false;*/
-          //fflush(stdout);
-
-          /* We need to reconfigure the tuner, so the async read must be stopped*/
-          /*if(reconfig_trigger==1)
-          {
-            reconfig_trigger=0;
-          }*/
-
-      //}
-     
-     
-     
-     /* Waiting for new data or reconfiguration command*/
-     
-   }
- 
-  fprintf(stderr, "[ INFO ] Exiting\n");  
-  for(int i=0; i<NUM_CH; i++)
-  {     
-    struct rtl_rec_struct *rtl_rec = &rtl_receivers[i];
-    if(rtlsdr_cancel_async(rtl_rec->dev) != 0)
-    {
-        fprintf(stderr, "[ ERROR ]  Async read stop failed: %s\n", strerror(errno));
-        exit(1);
+            rtl_rec = &rtl_receivers[i];
+            fwrite(rtl_rec->buffer, BUFF_LEN, 1, stdout);
+            fflush(stdout);
+        }
     }
-    fprintf(stderr, "[ INFO ] Async read stopped at device:%d\n",i);        
-    pthread_join(rtl_rec->async_read_thread, NULL);
-    free(rtl_rec->buffer);
     
-    /* This is does not work currently, TODO: Close the devices properly
-    if(rtlsdr_close(rtl_rec->dev) != 0)
-    {
-        fprintf(stderr, "[ ERROR ]  Device close failed: %s\n", strerror(errno));
-        exit(1);
+    fprintf(stderr, "[ INFO ] Exiting\n");  
+    for(int i=0; i<NUM_CH; i++)
+    {     
+        struct rtl_rec_struct *rtl_rec = &rtl_receivers[i];
+        if(rtlsdr_cancel_async(rtl_rec->dev) != 0)
+        {
+            fprintf(stderr, "[ ERROR ]  Async read stop failed: %s\n", strerror(errno));
+            exit(1);
+        }
+        fprintf(stderr, "[ INFO ] Async read stopped at device:%d\n",i);        
+        pthread_join(rtl_rec->async_read_thread, NULL);
+        free(rtl_rec->buffer);
     }
-    fprintf(stderr, "[ INFO ] Device closed with id:%d\n",i);
-    */
-  }
-  pthread_mutex_unlock(&buff_ind_mutex);
-  pthread_join(fifo_read_thread, NULL);
-  fprintf(stderr, "[ INFO ] All the resources are free now\n");
-  //TODO: Free up buffers and join pthreads
-  return 0;
+    
+
+    pthread_mutex_unlock(&buff_ind_mutex);
+    pthread_join(fifo_read_thread, NULL);
+    fprintf(stderr, "[ INFO ] All the resources are free now\n");
+    return 0;
 }
 
