@@ -1,0 +1,68 @@
+The process functions as follows:
+                                                                                                  ==========PYTHON APP==========
+===========         ===========                 ========                 ========                 | ========================== |
+| RTL-SDR |<-[USB]->| rtl_daq |-[stdout/stdin]->| sync |-[stdout/stdin]->| gate |-[stdout/stdin]--|>| hydra_signal_processor | |
+===========         ===========                 ========                 ========                 | ========================== |
+                                                                                                  ==============================
+
+Every C block (rtl_daq, sync and gate) can be interfaced by writting to their corresponding FIFOs.
+
+=== LOW LEVEL ===
+0)  RTL-SDR driver:
+    The RTL-SDR Driver is in charge of sending and receiving data from the RTL-SDRs on board
+    of the KerberosSDR platform. It uses libusb to handle the communication and offers a wide 
+    variety of different utility functions to prepare the data format expected by the 
+    KerberosSDR.
+
+1)  rtl_daq:
+    The rtl_daq module is in charge of handleing data coming to/from the four RTL-SDRs 
+    on board the KerberosSDR. It communicates with the radio using the RTL-SDR driver.
+    This module is responsible for sending the required configuration to the SDR and 
+    receive the I/Q data samples captured from the radios.
+
+    When a new configuration is sent to the control FIFO, the module cancels all USB
+    transfers and writes the new config to the device before restarting the continuous
+    USB read transfers. Every time a USB read is done, it is retriggered, so all reads
+    are done asynchronously and are made available as soon as they are done.
+
+    Once the I/Q samples have been read, they are send to the following module using 
+    stdout.
+
+2)  sync:
+    The sync module is in charge of applying a delay to the I/Q samples. The delay for 
+    each channel is supplied via a command to the module's FIFO. Upon receiving new 
+    samples from stdin, the module will fill a circular buffer with the samples and
+    write them with an offset to its stdout.
+
+3)  gate:
+    The gate module is simply used to latch the captures coming from the previous sync
+    module. Upon receiving a trigger signal, it will forward the data it has received to 
+    its stdout.
+
+4)  hydra_signal_processor:
+    The hydra_signal_processor.py script is used to manipulate the synchronized RTL-SDR captures.
+    It's also in charge of sending signals to the C block's FIFOs to control their behaviour.
+
+    Here is a list of commands that can be sent to each C block's FIFO:
+        rtl_daq
+            'r' [center_freq] [sample_rate] [gain 0, 1, 2, 3]   Reconfigure the tuner.
+            'n'                                                 Turn on the noise source.
+            'f'                                                 Turn off the noise source.
+            2                                                   Close the RTL-SDR receiver.
+
+        sync
+            'd' [delay 0, 1, 2, 3]                              Apply supplied delays.
+            1                                                   Apply zero delay (seems depricated).
+            2                                                   Close the sync process.
+        
+        gate
+            1                                                   Ask for gated samples.
+            2                                                   Close the gate process.
+
+=== TOP LEVEL ===
+Python application...
+
+Thoughts:
+    We could use an async/parallelism to access stdin from python in order to never drop any frames. Currently, 
+    if we don't process all the data between two captures, the frames are lost. We need to check if this is a real
+    issue though, the process might be quick enough for this not to be an issue.
