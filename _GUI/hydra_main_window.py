@@ -46,9 +46,9 @@ sys.path.insert(0, signalProcessorPath)
 from hydra_receiver import ReceiverRTLSDR
 
 # Import graphical user interface packages
-from PyQt4.QtGui import *
-from PyQt4 import QtCore
-from PyQt4 import QtGui
+from PyQt5.QtGui import *
+from PyQt5 import QtCore
+from PyQt5 import QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
