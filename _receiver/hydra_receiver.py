@@ -18,15 +18,17 @@
 
 # -*- coding: utf-8 -*-
 
+import logging
 import numpy as np
 import sys
 import time
-from struct import pack, unpack
+from struct import pack
 from scipy import signal
+
 
 class ReceiverRTLSDR():
     """
-                    RTL SDR based receiver controller module
+        RTL SDR based receiver controller module
 
 
 
@@ -57,9 +59,8 @@ class ReceiverRTLSDR():
     """
 
     # GUI Signal definitions
-   
     def __init__(self):
-            #print("[ INFO ] Python rec: Starting Python RTL-SDR receiver")
+            logging.info("Python rec: Starting Python RTL-SDR receiver")
             
             # Receiver control parameters            
             self.gc_fifo_name = "_receiver/C/gate_control_fifo"
@@ -85,8 +86,7 @@ class ReceiverRTLSDR():
             
             # Data acquisition parameters
             self.channel_number = 4
-            self.block_size = 0; #128 * 1024 #256*1024
-                        
+            self.block_size = 0
             self.overdrive_detect_flag = False
 
             # IQ preprocessing parameters
@@ -100,15 +100,16 @@ class ReceiverRTLSDR():
             
             
     def set_sample_offsets(self, sample_offsets):
-        #print("[ INFO ] Python rec: Setting sample offset")
+        logging.info("Python rec: Setting sample offset")
         delays = [0] + (sample_offsets.tolist())
         self.sync_fifo_descriptor.write(self.sync_delay_byte)
         self.sync_fifo_descriptor.write(pack("i"*4,*delays))
     
     def reconfigure_tuner(self, center_freq, sample_rate, gain):
-       #print("[ INFO ] Python rec: Setting receiver center frequency to:",center_freq)
-       #print("[ INFO ] Python rec: Setting receiver sample rate to:",sample_rate)
-       #print("[ INFO ] Python rec: Setting receiver gain to:",gain)
+       logging.info(f"Python rec: Setting receiver center frequency to:{center_freq}")
+       logging.info(f"Python rec: Setting receiver sample rate to:{sample_rate}")
+       logging.info(f"Python rec: Setting receiver gain to:{gain}")
+       # Send new config to the control FIFO
        self.rec_control_fifo_descriptor.write(self.reconfig_tuner_byte)    
        self.rec_control_fifo_descriptor.write(pack("I", int(center_freq)))
        self.rec_control_fifo_descriptor.write(pack("I", int(sample_rate)))
@@ -119,10 +120,10 @@ class ReceiverRTLSDR():
     
     def switch_noise_source(self, state):
         if state:
-            #print("[ INFO ] Python rec: Turning on noise source")
+            logging.info("Python rec: Turning on noise source")
             self.rec_control_fifo_descriptor.write(self.noise_source_on_byte)
         else:
-            #print("[ INFO ] Python rec: Turning off noise source")
+            logging.info("Python rec: Turning off noise source")
             self.rec_control_fifo_descriptor.write(self.noise_source_off_byte)
             
     def set_fir_coeffs(self, fir_size, bw):
@@ -141,20 +142,9 @@ class ReceiverRTLSDR():
     def download_iq_samples(self):
             self.iq_samples = np.zeros((self.channel_number, self.block_size//2), dtype=np.complex64)
             self.gc_fifo_descriptor.write(self.gate_trigger_byte)
-            #print("[ INFO ] Python rec: Trigger writen")
-            # -*- coding: utf-8 -*-
-            #time.sleep(0.5)
+            logging.info("Python rec: Trigger written")
             read_size = self.block_size * self.channel_number
-
-            #byte_data=[]
-            #format_string = "B"*read_size
-            #while True:
             byte_array_read = sys.stdin.buffer.read(read_size)
-            """                
-                if not byte_array_read or len(byte_data) >= read_size:
-                    print("EOF")
-                    break
-            """
             overdrive_margin = 0.95
             self.overdrive_detect_flag = False
 
@@ -162,43 +152,15 @@ class ReceiverRTLSDR():
 
             self.iq_samples.real = byte_data_np[0:self.channel_number*self.block_size:2].reshape(self.channel_number, self.block_size//2)
             self.iq_samples.imag = byte_data_np[1:self.channel_number*self.block_size:2].reshape(self.channel_number ,self.block_size//2)
-
-
-     #       for m in range(self.channel_number):    
-      #          real = byte_data_np[m*self.block_size:(m+1)*self.block_size:2]
-       #         imag = byte_data_np[m*self.block_size+1:(m+1)*self.block_size:2]
-                #real = np.array(byte_data[::2], dtype=np.uint8)
-                #imag = np.array(byte_data[1::2], dtype=np.uint8)
-        #        self.iq_samples[m,:].real, self.iq_samples[m,:].imag = real, imag
-                # Check overdrive
-                #if (np.greater(self.iq_samples[m, :].real,int(127+128*overdrive_margin)).any()) or  (np.less(self.iq_samples[m, :].real, int(127-128*overdrive_margin)).any()):                      
-                #      self.overdrive_detect_flag = True
-                      #print("[ WARNING ] Overdrive at ch: %d"%m)   
-                      #print("real max: ",np.max(self.iq_samples[m, :].real))
-                      #print("real min: ",np.min(self.iq_samples[m, :].real))
-                #if (np.greater(self.iq_samples[m, :].imag, int(127+128*overdrive_margin)).any()) or (np.less(self.iq_samples[m, :].imag, int(127-128*overdrive_margin)).any()):                      
-                #      self.overdrive_detect_flag = True
-                      #print("[ WARNING ] Overdrive at ch: %d"%m)                
-                      #print("imag max: ",np.max(self.iq_samples[m, :].real))
-                      #print("imag min: ",np.min(self.iq_samples[m, :].real))
-
-
-            
             self.iq_samples /= (255 / 2)
             self.iq_samples -= (1 + 1j) 
-            
-                      
-            
-            #np.save("hydra_raw.npy",self.iq_samples)
             self.iq_preprocessing()
-            #print("[ DONE] IQ sample read ready")
-            
-            
-            #return iq_samples    
+
+            logging.info("IQ sample read ready")
        
     def iq_preprocessing(self):
-                
-        # Decimation
+        
+        # Decimation (downsampling)
         if self.decimation_ratio > 1:
            iq_samples_dec = np.zeros((self.channel_number, round(self.block_size//2/self.decimation_ratio)), dtype=np.complex64)
            for m in range(self.channel_number):
@@ -227,7 +189,7 @@ class ReceiverRTLSDR():
         time.sleep(1)
         self.gc_fifo_descriptor.close()
         self.sync_fifo_descriptor.close()
-        print("[ INFO ] Python rec: FIFOs are closed")
+        logging.info("Python rec: FIFOs are closed")
 
         
         

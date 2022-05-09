@@ -156,7 +156,6 @@ void * fifo_read_tf(void* arg)
         {
             fprintf(stderr,"Signal 'n': Turn on noise source \n");            
             noise_source_state = 1;
-	    reconfig_trigger = 0;
 
             rtlsdr_set_gpio(rtl_receivers[0].dev, 1, 0);
 
@@ -165,7 +164,6 @@ void * fifo_read_tf(void* arg)
         {
             fprintf(stderr,"Signal 'f': Turn off noise source \n");            
             noise_source_state = 0;
-            reconfig_trigger = 0;
             rtlsdr_set_gpio(rtl_receivers[0].dev, 0, 0);
 
         }
