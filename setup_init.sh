@@ -12,4 +12,5 @@ chmod a+x _receiver/C/gate
 sudo chmod +x run.sh
 sudo chmod +x kill.sh
 
-sudo mkdir -p /ram
+echo "[ INFO ] Generate GUI layout"
+(cd _GUI/ && exec ./convert.sh)

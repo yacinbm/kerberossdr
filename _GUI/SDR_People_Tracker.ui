@@ -24,26 +24,77 @@
        <attribute name="title">
         <string>Calibration</string>
        </attribute>
-       <layout class="QVBoxLayout" name="verticalLayout_2">
-        <item>
-         <widget class="QGraphicsView" name="calGraph"/>
+       <layout class="QFormLayout" name="formLayout">
+        <item row="0" column="0">
+         <layout class="QVBoxLayout" name="verticalLayout_5">
+          <item>
+           <layout class="QFormLayout" name="formLayout_2">
+            <item row="0" column="1">
+             <widget class="QLineEdit" name="lineStartFreq"/>
+            </item>
+            <item row="1" column="0">
+             <widget class="QLabel" name="labelStopFreq">
+              <property name="text">
+               <string>Stop Freq (MHz)</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QLineEdit" name="lineStopFreq"/>
+            </item>
+            <item row="0" column="0">
+             <widget class="QLabel" name="labelStartFreq">
+              <property name="text">
+               <string>Start Freq (MHz)</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="labelDetectionThreshold">
+              <property name="text">
+               <string>Detection Threshold (dbM)</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QLineEdit" name="lineDetectThrhld"/>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <spacer name="verticalSpacer">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnStartCal">
+            <property name="text">
+             <string>Start Calibration</string>
+            </property>
+            <property name="autoExclusive">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QProgressBar" name="progBarCal">
+            <property name="value">
+             <number>0</number>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </item>
-        <item>
-         <widget class="QProgressBar" name="progBarCal">
-          <property name="value">
-           <number>24</number>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="btnStartCal">
-          <property name="text">
-           <string>Start Calibration</string>
-          </property>
-          <property name="autoExclusive">
-           <bool>false</bool>
-          </property>
-         </widget>
+        <item row="0" column="1">
+         <widget class="QGraphicsView" name="graphCal"/>
         </item>
        </layout>
       </widget>
@@ -72,15 +123,21 @@
     <property name="title">
      <string>&amp;File</string>
     </property>
-    <addaction name="action_Save"/>
+    <widget class="QMenu" name="menu_Save">
+     <property name="title">
+      <string>&amp;Save</string>
+     </property>
+     <addaction name="actionCalibration_Data"/>
+    </widget>
+    <addaction name="menu_Save"/>
     <addaction name="separator"/>
    </widget>
    <addaction name="menu_File"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
-  <action name="action_Save">
+  <action name="actionCalibration_Data">
    <property name="text">
-    <string>&amp;Save</string>
+    <string>Calibration Data</string>
    </property>
   </action>
  </widget>

@@ -1,14 +1,9 @@
 #!/bin/bash
-
-DEBUG=false
-
 BUFF_SIZE=256 #Must be a power of 2. Normal values are 128, 256. 512 is possible on a fast PC.
-IPADDR="0.0.0.0"
-IPPORT="8081"
 
 # set to /dev/null for no logging, set to some file for logfile. You can also set it to the same file. 
-RTLDAQLOG="rtl_daq.log"
-SYNCLOG="sync.log"
+RTLDAQLOG="/dev/null"#"rtl_daq.log"
+SYNCLOG="/dev/null"#"sync.log"
 GATELOG="gate.log"
 PYTHONLOG="python.log"
 
@@ -118,22 +113,9 @@ curr_user=$(whoami)
 # You can interface with the rtl_daq module by writing to its FIFO. 
 # 
 
-if $DEBUG ; then
-	rm -f _receiver/C/gate_debug
-	sudo chrt -r 50 taskset -c $NPROC ionice -c 1 -n 0 ./_receiver/C/rtl_daq $BUFF_SIZE 2>$RTLDAQLOG 1| \
-			sudo chrt -r 50 taskset -c $NPROC ./_receiver/C/sync $BUFF_SIZE 2>$SYNCLOG 1| \
-			sudo chrt -r 50 taskset -c $NPROC ./_receiver/C/gate $BUFF_SIZE 2>$GATELOG 1>"_receiver/C/gate_debug" &
-else
-	sudo chrt -r 50 taskset -c $NPROC ionice -c 1 -n 0 ./_receiver/C/rtl_daq $BUFF_SIZE 2>$RTLDAQLOG 1| \
-		sudo chrt -r 50 taskset -c $NPROC ./_receiver/C/sync $BUFF_SIZE 2>$SYNCLOG 1| \
-		sudo chrt -r 50 taskset -c $NPROC ./_receiver/C/gate $BUFF_SIZE 2>$GATELOG 1| \
-		sudo nice -n -20 sudo -u $curr_user python3 -O test.py $BUFF_SIZE $IPADDR &>$PYTHONLOG
-		#sudo nice -n -20 sudo -u $curr_user python3 -O main.py $BUFF_SIZE $IPADDR &>$PYTHONLOG
-fi
+sudo chrt -r 50 taskset -c $NPROC ionice -c 1 -n 0 ./_receiver/C/rtl_daq $BUFF_SIZE 2>$RTLDAQLOG 1| \
+	sudo chrt -r 50 taskset -c $NPROC ./_receiver/C/sync $BUFF_SIZE 2>$SYNCLOG 1| \
+	sudo chrt -r 50 taskset -c $NPROC ./_receiver/C/gate $BUFF_SIZE 2>$GATELOG 1| \
+	sudo nice -n -20 sudo -u $curr_user python3 -O main.py $BUFF_SIZE &>$PYTHONLOG &
 
 echo "KerberosSDR started..."
-
-# Start PHP webserver which serves the updating images
-#echo "Python Server running at $IPADDR:8080"
-#echo "PHP Server running at $IPADDR:$IPPORT"
-#sudo php -S $IPADDR:$IPPORT -t _webDisplay >&- 2>&-

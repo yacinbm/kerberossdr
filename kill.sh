@@ -1,5 +1,6 @@
 #/bin/sh!
 
+sudo rm -f _receiver/C/*_fifo
 sudo kill $(ps aux | grep 'rtl' | awk '{print $2}')
 #sudo killall -s 9 rtl*
 sudo pkill rtl_daq

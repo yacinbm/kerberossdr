@@ -22,13 +22,14 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <string.h>
 
 #define CFN "_receiver/C/gate_control_fifo" // Name of the gate control fifo - Control FIFO name
 
 int BUFFER_SIZE;
 
-static sem_t trigger_sem;
-static volatile int trigger=0, exit_flag=0;
+static sem_t trigger_sem, flush_sem;
+static volatile int trigger=0, exit_flag=0, flush_flag=0;
 pthread_t fifo_read_thread;   
 void * fifo_read_tf(void* arg) 
 {
@@ -56,6 +57,12 @@ void * fifo_read_tf(void* arg)
             exit_flag = 1;
             break;
         }
+        else if ( (uint8_t) trigger_read == 3)
+        {
+            fprintf(stderr,"[ INFO ] Flush command receive, dump the current buffer...");
+            flush_flag = 1;
+            sem_wait(&flush_sem);
+        }
     }
     fclose(fd);
     return NULL;
@@ -70,7 +77,8 @@ int main(int argc, char** argv)
     int read_size;
     uint8_t * buffer;    
 
-    sem_init(&trigger_sem, 0, 0);  // Semaphore is unlocked    
+    sem_init(&trigger_sem, 0, 0);  // Semaphore is unlocked
+    sem_init(&flush_sem, 0, 0); 
     pthread_create(&fifo_read_thread, NULL, fifo_read_tf, NULL);
     
     // Allocate sample buffer
@@ -83,8 +91,15 @@ int main(int argc, char** argv)
         if(feof(stdin))
             break;
         
+        if(flush_flag == 1)
+        {
+            fflush(stdin);
+            flush_flag = 0;
+            sem_post(&flush_sem);
+        }
+            
         read_size = fread(buffer,sizeof(*buffer), BUFFER_SIZE, stdin);
-   
+
         if(read_size>0)
         {
             if(trigger == 1)
@@ -101,8 +116,7 @@ int main(int argc, char** argv)
             }
             
             if(exit_flag)
-              break;  
-            
+              break;
         }
         
     }    

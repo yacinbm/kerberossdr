@@ -19,12 +19,13 @@
 # -*- coding: utf-8 -*-
 
 import logging
-from tkinter.messagebox import NO
 import numpy as np
 import sys
+import select
 import time
 from struct import pack
 from scipy import signal
+from PyQt5.QtCore import QMutex
 
 class ReceiverRTLSDR():
     """
@@ -59,12 +60,12 @@ class ReceiverRTLSDR():
     """
 
     # GUI Signal definitions
-    def __init__(self, debug=None):
-            if debug:
-                sys.stdin = open("_receiver/C/gate_debug")
+    def __init__(self):
             
             logging.info("Python rec: Starting Python RTL-SDR receiver")
-            
+            # Thread control
+            self.mutex = QMutex()
+
             # Receiver control parameters            
             self.gc_fifo_name = "_receiver/C/gate_control_fifo"
             self.sync_fifo_name = "_receiver/C/sync_control_fifo"
@@ -72,6 +73,7 @@ class ReceiverRTLSDR():
             
             self.gate_trigger_byte = pack('B',1)          
             self.gate_close_byte = pack('B',2)
+            self.gate_flush_byte = pack('B',3)
             self.sync_close_byte = pack('B',2)
             self.rec_control_close_byte = pack('B',2) 
             self.sync_delay_byte = 'd'.encode('ascii')
@@ -83,10 +85,10 @@ class ReceiverRTLSDR():
             self.rec_control_fifo_descriptor = open(self.rec_control_fifo_name, 'w+b', buffering=0)
             
             self.is_noise_source_on = False
-
-            self.receiver_gain = [0,0,0,0]
             
             # Data acquisition parameters
+            self.receiver_gain = [0,0,0,0]
+            self.center_f = 24e6
             self.channel_number = 4
             self.block_size = 0
             self.overdrive_detect_flag = False
@@ -111,6 +113,9 @@ class ReceiverRTLSDR():
        logging.info(f"Python rec: Setting receiver center frequency to:{center_freq}")
        logging.info(f"Python rec: Setting receiver sample rate to:{sample_rate}")
        logging.info(f"Python rec: Setting receiver gain to:{gain}")
+       self.center_f = center_freq
+       self.receiver_gain = gain
+       self.fs = sample_rate
        # Send new config to the control FIFO
        self.rec_control_fifo_descriptor.write(self.reconfig_tuner_byte)    
        self.rec_control_fifo_descriptor.write(pack("I", int(center_freq)))
@@ -120,6 +125,8 @@ class ReceiverRTLSDR():
        self.rec_control_fifo_descriptor.write(pack("i", int(gain[2])))
        self.rec_control_fifo_descriptor.write(pack("i", int(gain[3])))
        time.sleep(0.05) # Wait for Rx to stabilize
+       # Flush the input stream to remove any pending captures
+       self.gc_fifo_descriptor.write(self.gate_flush_byte)
     
     def switch_noise_source(self, state):
         if state:
@@ -147,7 +154,7 @@ class ReceiverRTLSDR():
     def download_iq_samples(self):
             self.iq_samples = np.zeros((self.channel_number, self.block_size//2), dtype=np.complex64)
             self.gc_fifo_descriptor.write(self.gate_trigger_byte)
-            logging.info("Python rec: Trigger written")
+            logging.debug("Python rec: Trigger written")
             read_size = self.block_size * self.channel_number
             byte_array_read = sys.stdin.buffer.read(read_size)
             overdrive_margin = 0.95
@@ -164,7 +171,7 @@ class ReceiverRTLSDR():
             self.iq_samples -= (1 + 1j) 
             self.iq_preprocessing()
 
-            logging.info("IQ sample read ready")
+            logging.debug("IQ sample read ready")
        
     def iq_preprocessing(self):
         # Decimation (downsampling)

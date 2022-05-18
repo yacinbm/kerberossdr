@@ -58,7 +58,7 @@ from matplotlib import cm
 #import matplotlib.patches as patches
 
 
-from hydra_main_window_layout import Ui_MainWindow
+from _GUI.hydra_main_window_layout import Ui_MainWindow
 from _signalProcessing.hydra_signal_processor import SignalProcessor
 
 # Import the pyArgus module

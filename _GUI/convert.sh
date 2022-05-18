@@ -1,2 +1,2 @@
 #!/bin/sh
-pyuic4 Main_hydra_dev.ui -o hydra_main_window_layout.py
+pyuic5 ./SDR_People_Tracker.ui -o ./sdr_people_tracker_main_window.py
