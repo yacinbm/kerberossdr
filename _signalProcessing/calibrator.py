@@ -86,24 +86,25 @@ class Calibrator(QThread):
             # Save data point
             self.calibration_data = np.append(self.calibration_data, [[time.time()-start_time], [peak_f]], axis=1)
 
+            if peak_f >= self.stop_f:
+                # Calibration done
+                self.signal_calibration_done.emit()
+                self.signal_calibration_progress.emit(100)
+                self.calibration_done = True
+
             # Check recentering
             spectrum_edge = self.spectrum[0,-1]
             if peak_f >= (spectrum_edge - self.margin):
                 center_f = int(spectrum_edge - 1.5*self.margin + self.receiver.fs/2)
 
-                if center_f < self.stop_f:
-                    logging.debug(f"Calibrator: Reconfiguring center to {center_f}")
-                    self.receiver.reconfigure_tuner(center_f, self.receiver.fs, self.receiver.receiver_gain)
-                    # Update progress 
-                    progress = (center_f - self.start_f)*100//(self.stop_f - self.start_f)
-                    logging.debug(f"Calibration: Progress {int(progress)}%")
-                    self.signal_calibration_progress.emit(int(progress))
+                logging.debug(f"Calibrator: Reconfiguring center to {center_f}")
+                self.receiver.reconfigure_tuner(center_f, self.receiver.fs, self.receiver.receiver_gain)
+                # Update progress 
+                progress = (center_f - self.start_f)*100//(self.stop_f - self.start_f)
+                logging.debug(f"Calibration: Progress {int(progress)}%")
+                self.signal_calibration_progress.emit(int(progress))
 
-                else: 
-                    # Calibration done
-                    self.signal_calibration_done.emit()
-                    self.signal_calibration_progress.emit(100)
-                    self.calibration_done = True
+                    
         
         # Release the receiver
         self.receiver.mutex.unlock()

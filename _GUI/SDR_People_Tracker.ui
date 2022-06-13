@@ -14,11 +14,11 @@
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QVBoxLayout" name="verticalLayout">
+   <layout class="QHBoxLayout" name="horizontalLayout_2">
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>0</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="tabCal">
        <attribute name="title">
@@ -102,6 +102,115 @@
        <attribute name="title">
         <string>Distance Estimation</string>
        </attribute>
+       <layout class="QFormLayout" name="formLayout_3">
+        <item row="0" column="1">
+         <layout class="QVBoxLayout" name="layoutGraphs">
+          <item>
+           <layout class="QHBoxLayout" name="layoutMeasure">
+            <item>
+             <widget class="QGraphicsView" name="graphMeasure"/>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QGraphicsView" name="graphPosition"/>
+          </item>
+         </layout>
+        </item>
+        <item row="0" column="0">
+         <layout class="QFormLayout" name="formLayout_4">
+          <item row="0" column="0">
+           <widget class="QLabel" name="label_3">
+            <property name="text">
+             <string>Center Frequency [MHz]</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QDoubleSpinBox" name="spinCenterFreq">
+            <property name="minimum">
+             <double>24.000000000000000</double>
+            </property>
+            <property name="maximum">
+             <double>1750.000000000000000</double>
+            </property>
+            <property name="value">
+             <double>1000.000000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="label">
+            <property name="text">
+             <string>FIR Tap Size</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QSpinBox" name="spinFirTapSize">
+            <property name="maximum">
+             <number>1000</number>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="label_2">
+            <property name="text">
+             <string>Filter Bandwith [kHz]</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QDoubleSpinBox" name="spinFilterBw">
+            <property name="maximum">
+             <double>200.000000000000000</double>
+            </property>
+            <property name="value">
+             <double>30.000000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0">
+           <widget class="QLabel" name="label_4">
+            <property name="text">
+             <string>Inter Element Distance [cm]</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1">
+           <widget class="QDoubleSpinBox" name="spinInterAntDist">
+            <property name="maximum">
+             <double>100.000000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="0">
+           <widget class="QLabel" name="label_5">
+            <property name="text">
+             <string>AOA [deg]:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="1">
+           <widget class="QLabel" name="labelAOA">
+            <property name="text">
+             <string>0</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="6" column="0" colspan="2">
+           <widget class="QPushButton" name="btnStartTrack">
+            <property name="text">
+             <string>Start Tracking</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
       </widget>
      </widget>
     </item>

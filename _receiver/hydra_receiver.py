@@ -127,6 +127,8 @@ class ReceiverRTLSDR():
        time.sleep(0.05) # Wait for Rx to stabilize
        # Flush the input stream to remove any pending captures
        self.gc_fifo_descriptor.write(self.gate_flush_byte)
+       self.gc_fifo_descriptor.write(self.gate_flush_byte)
+       self.gc_fifo_descriptor.write(self.gate_flush_byte)
     
     def switch_noise_source(self, state):
         if state:
@@ -189,11 +191,12 @@ class ReceiverRTLSDR():
         # Remove DC content (Force on for now)
         if self.en_dc_compensation or True:
             for m in np.arange(0, self.channel_number):
-               self.iq_samples[m,:]-= np.average( self.iq_samples[m,:])
+               self.iq_samples[m,:]-= np.average(self.iq_samples[m,:])
            
         # IQ correction
         for m in np.arange(0, self.channel_number):
-            self.iq_samples[m, :] *= self.iq_corrections[m]
+            pass
+            #self.iq_samples[m, :] *= self.iq_corrections[m]
     
         
     def close(self):

@@ -2,6 +2,7 @@ import logging
 import numpy as np
 import time
 from scipy.signal import find_peaks
+from scipy.constants import speed_of_light
 from PyQt5.QtCore import QThread, pyqtSignal
 
 # Import Kerberos receiver
@@ -16,10 +17,11 @@ class Tracker(QThread):
     signal_sync_ready = pyqtSignal()
     signal_period = pyqtSignal(float)
     signal_spectrum_ready = pyqtSignal()
+    signal_aoa_ready = pyqtSignal()
 
     def __init__(self, receiver:ReceiverRTLSDR) -> None:
         #TODO: 
-        # Determine the optimal (or at least the role of) spectrum_sample_size, xcorr_sample_size & DOA_sample_size
+        # Determine the optimal (or at least the role of) spectrum_sample_size, xcorr_sample_size & aoa_sample_size
           
         # Class initialization
         super(QThread, self).__init__()
@@ -29,22 +31,31 @@ class Tracker(QThread):
         self.scan_stop_f = 240e6
         self.scan_step = 0  # Initialize before start
         # Control flags
-        self.tracker_running = False
+        self.running = False
         self.en_noise_meas = False
         self.en_scan = False
         self.en_sync = False
         self.en_sample_offset_sync = False
         self.en_calib_iq = False
-        self.en_DOA_FB_avg = False
+        self.en_aoa_FB_avg = False
+        self.en_estimate_aoa = False
+        self.en_estimate_distance = False
         # Spectrum variables
         self.spectrum_sample_size = 2**14
-        self.spectrum = np.ones((self.receiver.channel_number+1,self.spectrum_sample_size), dtype=np.float32) # idx 0 are the frequencies and the rest are the results
+        self.spectrum = np.ones((self.receiver.channel_number+1,self.spectrum_sample_size), dtype=np.float32) # idx 0 are the frequencies and the rest are the power
         # Cross Correlation variables
         self.xcorr_sample_size = 2**18
         self.xcorr = np.ones((self.receiver.channel_number-1,self.xcorr_sample_size*2), dtype=np.complex64)        
-        # Direction of Arrival (DOA) variables
-        self.DOA_inter_elem_space = 0.5 # d_antennas/lambda
-        self.DOA_sample_size = 2**15 
+        # Distance estimation variables
+        self.chirp_span = 1.5e6
+        self.chirp_freq = 50e3
+        self.chirp_slope = self.chirp_span * self.chirp_freq
+        self.distance_sample_size = 1000 # Keep the last 1000 captures
+        self.distance_res = np.zeros((self.distance_sample_size, self.spectrum_sample_size), dtype=np.float32) 
+        # Direction of Arrival (aoa) variables
+        self.antenna_distance = 0.0 # Antennas distance in m
+        self.aoa_inter_elem_space = 0.5 # d_antennas/lambda
+        self.aoa_sample_size = 2**15 
         # Result Vectors
         self.noise_lvl = np.empty(self.receiver.channel_number, dtype=np.float32)
         self.noise_var= np.empty(self.receiver.channel_number, dtype=np.float32)
@@ -53,8 +64,8 @@ class Tracker(QThread):
         self.peak_freq = np.array([],dtype=np.float32)
         self.peak_pwr = np.array([],dtype=np.float32)
         self.spectrum_log = np.array([[]]*(self.receiver.channel_number+1), dtype=np.float32) # idx 0 are the frequencies and the rest are the results
-        self.DOA_MUSIC_res = np.ones(181)
-        self.DOA_theta = np.arange(0,181,1)
+        self.aoa_MUSIC_res = np.ones(181)
+        self.aoa_theta = np.arange(0,181,1)
 
     def run(self):
         # Lock the receiver
@@ -62,8 +73,8 @@ class Tracker(QThread):
             logging.warning("Tracker: Could not lock the receiver, returning...")
             return
 
-        self.tracker_running = True
-        while self.tracker_running:
+        self.running = True
+        while self.running:
             start_time = time.time()
 
             self.receiver.download_iq_samples()
@@ -71,10 +82,10 @@ class Tracker(QThread):
             self.xcorr = np.ones((self.receiver.channel_number-1,self.xcorr_sample_size*2), dtype=np.complex64) 
             
             # Compute FFT
-            self.spectrum[0, :] = np.fft.fftshift(np.fft.fftfreq(self.spectrum_sample_size, 1/self.receiver.fs)) + self.receiver.center_f
+            self.spectrum[0, :] = np.fft.fftshift(np.fft.fftfreq(self.spectrum_sample_size, 1/self.receiver.fs))/1e6
             for m in range(self.receiver.channel_number):
                 self.spectrum[m+1,:] = 10*np.log10(np.fft.fftshift(np.abs(np.fft.fft(self.receiver.iq_samples[m, 0:self.spectrum_sample_size]))))
-            
+                logging.debug(f"Noise floor: {np.average(self.spectrum[m+1,:])}dBm")
             self.signal_spectrum_ready.emit()
 
              # Characterize noise
@@ -92,7 +103,7 @@ class Tracker(QThread):
                     self.receiver.iq_corrections[m] *= np.size(self.receiver.iq_samples[0, :])/(np.dot(self.receiver.iq_samples[m, :],self.receiver.iq_samples[0, :].conj()))
                 c = np.sqrt(np.sum(np.abs(self.receiver.iq_corrections)**2))
                 self.receiver.iq_corrections = np.divide(self.receiver.iq_corrections, c)
-                logging.info("Corrections: ",self.receiver.iq_corrections)
+                logging.debug(f"Corrections: {self.receiver.iq_corrections}")
                 self.en_calib_iq = False
 
             # Synchronization
@@ -102,13 +113,21 @@ class Tracker(QThread):
                 logging.info("Synching...")
                 self.sample_delay()
                 logging.debug(f"Sync done in: {time.time()-sync_time}")
-                self.signal_sync_ready.emit()
 
             # Send sync to receiver
             if self.en_sample_offset_sync:
                 self.receiver.set_sample_offsets(self.delay_log[:,-1])
                 self.en_sample_offset_sync = False
-            
+                self.signal_sync_ready.emit()
+
+            # AoA estimation
+            if self.en_estimate_aoa:
+                # Get FFT for squelch
+                self.spectrum[1,:] = 10*np.log10(np.fft.fftshift(np.abs(np.fft.fft(self.receiver.iq_samples[0, 0:self.spectrum_sample_size]))))
+
+                self.estimate_aoa()
+                self.signal_aoa_ready.emit()
+
             # Spectrum scan to find peaks
             if self.en_scan:
                 self.spectrum_log = np.concatenate((self.spectrum_log,self.spectrum),1)
@@ -170,28 +189,31 @@ class Tracker(QThread):
         self.delay_log = np.concatenate((self.delay_log, delays),axis=1)
         self.phase_log = np.concatenate((self.phase_log, phases),axis=1)
 
-    def estimate_DOA(self):
-        logging.info("Tracker: Estimating DOA")
+    def estimate_aoa(self):
+        logging.info("Tracker: Estimating aoa")
 
-        iq_samples = self.receiver.iq_samples[:, 0:self.DOA_sample_size]
+        iq_samples = self.receiver.iq_samples[:, 0:self.aoa_sample_size]
         # Calculating spatial correlation matrix
         R = de.corr_matrix_estimate(iq_samples.T, imp="fast")
 
-        if self.en_DOA_FB_avg:
+        if self.en_aoa_FB_avg:
             R=de.forward_backward_avg(R)
 
         M = np.size(iq_samples, 0)
 
         # Generate antenna coordonates
-        self.DOA_theta =  np.linspace(-90,90,181)
+        wave_length = speed_of_light / self.receiver.center_f
+        self.aoa_inter_elem_space = self.antenna_distance/wave_length
+        logging.debug(f"Inter elem: {self.aoa_inter_elem_space}")
+        self.aoa_theta =  np.linspace(-45,45,46)#np.linspace(-90,90,181)
         x = np.zeros(M)
-        y = np.arange(M) * self.DOA_inter_elem_space            
-        scanning_vectors = de.gen_scanning_vectors(M, x, y, self.DOA_theta)
+        y = np.arange(M) * self.aoa_inter_elem_space            
+        scanning_vectors = de.gen_scanning_vectors(M, x, y, self.aoa_theta)
 
-        # Calculate DOA
-        self.DOA_MUSIC_res = de.DOA_MUSIC(R, scanning_vectors, signal_dimension = 1)
+        # Calculate aoa
+        self.aoa_MUSIC_res = de.DOA_MUSIC(R, scanning_vectors, signal_dimension=1)
     
     
     def stop(self):
-        self.tracker_running = False
+        self.running = False
 
