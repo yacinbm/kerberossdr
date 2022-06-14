@@ -1,5 +1,7 @@
 #!/bin/bash
 
+DEBUG=false
+
 BUFF_SIZE=256 #Must be a power of 2. Normal values are 128, 256. 512 is possible on a fast PC.
 IPADDR="0.0.0.0"
 IPPORT="8081"
@@ -8,7 +10,7 @@ IPPORT="8081"
 RTLDAQLOG="rtl_daq.log"
 SYNCLOG="sync.log"
 GATELOG="gate.log"
-PYTHONLOG="main.log"
+PYTHONLOG="python.log"
 
 # If you want to kill all matching processes on startup without prompt. Otherwise, set it to anything else. 
 FORCE_KILL="yes"
@@ -88,9 +90,6 @@ done
 
 sleep 1
 
-# Create RAMDISK for jpg files
-sudo mount -osize=30m tmpfs /ram -t tmpfs
-
 # Remake Controller FIFOs. Deleting them should not be neccessary after 
 # a clean exit, but why not do it anyway... 
 rm -f _receiver/C/gate_control_fifo
@@ -119,10 +118,20 @@ curr_user=$(whoami)
 # You can interface with the rtl_daq module by writing to its FIFO. 
 # 
 
-sudo chrt -r 50 taskset -c $NPROC ionice -c 1 -n 0 ./_receiver/C/rtl_daq $BUFF_SIZE 2>$RTLDAQLOG 1| \
-	sudo chrt -r 50 taskset -c $NPROC ./_receiver/C/sync $BUFF_SIZE 2>$SYNCLOG 1| \
-	sudo chrt -r 50 taskset -c $NPROC ./_receiver/C/gate $BUFF_SIZE 2>$GATELOG 1| \
-	sudo nice -n -20 sudo -u $curr_user python3 -O main.py $BUFF_SIZE $IPADDR &>$PYTHONLOG &
+if $DEBUG ; then
+	rm -f _receiver/C/gate_debug
+	sudo chrt -r 50 taskset -c $NPROC ionice -c 1 -n 0 ./_receiver/C/rtl_daq $BUFF_SIZE 2>$RTLDAQLOG 1| \
+			sudo chrt -r 50 taskset -c $NPROC ./_receiver/C/sync $BUFF_SIZE 2>$SYNCLOG 1| \
+			sudo chrt -r 50 taskset -c $NPROC ./_receiver/C/gate $BUFF_SIZE 2>$GATELOG 1>"_receiver/C/gate_debug" &
+else
+	sudo chrt -r 50 taskset -c $NPROC ionice -c 1 -n 0 ./_receiver/C/rtl_daq $BUFF_SIZE 2>$RTLDAQLOG 1| \
+		sudo chrt -r 50 taskset -c $NPROC ./_receiver/C/sync $BUFF_SIZE 2>$SYNCLOG 1| \
+		sudo chrt -r 50 taskset -c $NPROC ./_receiver/C/gate $BUFF_SIZE 2>$GATELOG 1| \
+		sudo nice -n -20 sudo -u $curr_user python3 -O test.py $BUFF_SIZE $IPADDR &>$PYTHONLOG
+		#sudo nice -n -20 sudo -u $curr_user python3 -O main.py $BUFF_SIZE $IPADDR &>$PYTHONLOG
+fi
+
+echo "KerberosSDR started..."
 
 # Start PHP webserver which serves the updating images
 #echo "Python Server running at $IPADDR:8080"

@@ -34,19 +34,12 @@ import save_settings as settings
 np.seterr(divide='ignore')
 
 # Import Kerberos modules
-currentPath = os.path.dirname(os.path.realpath(__file__))
-rootPath = os.path.dirname(currentPath)
 
-receiverPath        = os.path.join(rootPath, "_receiver")
-signalProcessorPath = os.path.join(rootPath, "_signalProcessing")
-
-sys.path.insert(0, receiverPath)
-sys.path.insert(0, signalProcessorPath)
-
-from hydra_receiver import ReceiverRTLSDR
+from _receiver.hydra_receiver import ReceiverRTLSDR
 
 # Import graphical user interface packages
 from PyQt5.QtGui import *
+from PyQt5.QtWidgets import QMainWindow, QApplication
 from PyQt5 import QtCore
 from PyQt5 import QtGui
 
@@ -66,7 +59,7 @@ from matplotlib import cm
 
 
 from hydra_main_window_layout import Ui_MainWindow
-from hydra_signal_processor import SignalProcessor
+from _signalProcessing.hydra_signal_processor import SignalProcessor
 
 # Import the pyArgus module
 #root_path = os.getcwd()
@@ -288,13 +281,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         # Init peak hold GUI setting
         self.en_peakhold = False
-
-
-
-        #self.spectrum_plot()
-        #self.delay_plot()
-        #self.DOA_plot()
-        #self.RD_plot()
 
 
         # Set default confiuration for the GUI components
@@ -564,11 +550,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             green_text += "OK"
             green_text += ("</span>")
             self.label_power_level.setText(green_text)
+    
     def period_time_update(self, update_period):
         if update_period > 1:
             self.label_update_rate.setText("%.1f s" %update_period)
         else:
             self.label_update_rate.setText("%.1f ms" %(update_period*1000))
+    
     def spectrum_plot(self):
         xw1 = self.module_signal_processor.spectrum[1,:]
         xw2 = self.module_signal_processor.spectrum[2,:]

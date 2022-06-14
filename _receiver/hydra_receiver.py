@@ -19,12 +19,12 @@
 # -*- coding: utf-8 -*-
 
 import logging
+from tkinter.messagebox import NO
 import numpy as np
 import sys
 import time
 from struct import pack
 from scipy import signal
-
 
 class ReceiverRTLSDR():
     """
@@ -59,7 +59,10 @@ class ReceiverRTLSDR():
     """
 
     # GUI Signal definitions
-    def __init__(self):
+    def __init__(self, debug=None):
+            if debug:
+                sys.stdin = open("_receiver/C/gate_debug")
+            
             logging.info("Python rec: Starting Python RTL-SDR receiver")
             
             # Receiver control parameters            
@@ -79,10 +82,9 @@ class ReceiverRTLSDR():
             self.sync_fifo_descriptor = open(self.sync_fifo_name, 'w+b', buffering=0)
             self.rec_control_fifo_descriptor = open(self.rec_control_fifo_name, 'w+b', buffering=0)
             
-            self.receiver_gain = 0 # Gain in dB x 10 
-            self.receiver_gain_2 = 0 # Gain in dB x 10 
-            self.receiver_gain_3 = 0 # Gain in dB x 10 
-            self.receiver_gain_4 = 0 # Gain in dB x 10 
+            self.is_noise_source_on = False
+
+            self.receiver_gain = [0,0,0,0]
             
             # Data acquisition parameters
             self.channel_number = 4
@@ -117,6 +119,7 @@ class ReceiverRTLSDR():
        self.rec_control_fifo_descriptor.write(pack("i", int(gain[1])))
        self.rec_control_fifo_descriptor.write(pack("i", int(gain[2])))
        self.rec_control_fifo_descriptor.write(pack("i", int(gain[3])))
+       time.sleep(0.05) # Wait for Rx to stabilize
     
     def switch_noise_source(self, state):
         if state:
@@ -125,6 +128,8 @@ class ReceiverRTLSDR():
         else:
             logging.info("Python rec: Turning off noise source")
             self.rec_control_fifo_descriptor.write(self.noise_source_off_byte)
+
+        self.is_noise_source_on = state
             
     def set_fir_coeffs(self, fir_size, bw):
         """
@@ -148,7 +153,10 @@ class ReceiverRTLSDR():
             overdrive_margin = 0.95
             self.overdrive_detect_flag = False
 
-            byte_data_np = np.frombuffer(byte_array_read, dtype='uint8', count=read_size)
+            try:
+                byte_data_np = np.frombuffer(byte_array_read, dtype='uint8', count=read_size)
+            except Exception as e:
+                return
 
             self.iq_samples.real = byte_data_np[0:self.channel_number*self.block_size:2].reshape(self.channel_number, self.block_size//2)
             self.iq_samples.imag = byte_data_np[1:self.channel_number*self.block_size:2].reshape(self.channel_number ,self.block_size//2)
@@ -159,7 +167,6 @@ class ReceiverRTLSDR():
             logging.info("IQ sample read ready")
        
     def iq_preprocessing(self):
-        
         # Decimation (downsampling)
         if self.decimation_ratio > 1:
            iq_samples_dec = np.zeros((self.channel_number, round(self.block_size//2/self.decimation_ratio)), dtype=np.complex64)

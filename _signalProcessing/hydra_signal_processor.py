@@ -36,20 +36,21 @@ from scipy.signal import correlate
 #import matplotlib.pyplot as plt
 
 # GUI support
-from PyQt5 import QtCore
+from PyQt5.QtCore import QThread, pyqtSignal
 
 # Import the pyArgus module
 from pyargus import directionEstimation as de
 
 
-class SignalProcessor(QtCore.QThread):
+class SignalProcessor(QThread):
     # GUI declarations
-    signal_spectrum_ready = QtCore.pyqtSignal()
-    signal_sync_ready = QtCore.pyqtSignal()
-    signal_DOA_ready = QtCore.pyqtSignal()
-    signal_overdrive = QtCore.pyqtSignal(int)
-    signal_period    = QtCore.pyqtSignal(float)
-    signal_PR_ready = QtCore.pyqtSignal()
+    signal_spectrum_ready = pyqtSignal()
+    signal_sync_ready = pyqtSignal()
+    signal_DOA_ready = pyqtSignal()
+    signal_overdrive = pyqtSignal(int)
+    signal_period    = pyqtSignal(float)
+    signal_PR_ready = pyqtSignal()
+    signal_scan_ready = pyqtSignal()
 
     def __init__(self, parent=None, module_receiver:ReceiverRTLSDR=None):
         super(SignalProcessor, self).__init__(parent)
@@ -64,7 +65,15 @@ class SignalProcessor(QtCore.QThread):
         self.en_DOA_estimation = False
         self.en_PR_processing = False
         self.en_PR_autodet = False
+        self.en_noise_var = False
         
+        # Scanning option
+        self.en_scan = True
+        self.start_freq = 24e6
+        self.stop_freq = 30e6#250e6
+        self.noise_threshold = 0
+        self.detected_freq = None
+
         # DOA processing options
         self.en_DOA_Bartlett = False
         self.en_DOA_Capon = False
@@ -106,6 +115,7 @@ class SignalProcessor(QtCore.QThread):
         self.run_processing = False
         
         # Result vectors
+        self.noise_var= np.empty(self.channel_number, dtype=float)
         self.delay_log= np.array([[0],[0],[0]])
         self.phase_log= np.array([[0],[0],[0]])
         self.DOA_Bartlett_res = np.ones(181)
@@ -120,10 +130,10 @@ class SignalProcessor(QtCore.QThread):
         self.timed_sync = False
         self.noise_checked = False
         self.resync_time = -1
-
+    
     def run(self):
         # xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-        #    
+        #    Redefinition of QThread run function
         # xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
         self.run_processing = True
         
@@ -140,6 +150,7 @@ class SignalProcessor(QtCore.QThread):
             # Check overdrive
             if self.module_receiver.overdrive_detect_flag:
                 self.signal_overdrive.emit(1)
+                
             else:
                 self.signal_overdrive.emit(0)
             
@@ -153,10 +164,16 @@ class SignalProcessor(QtCore.QThread):
             
             # Synchronization
             if self.en_sync or self.timed_sync:
+                sync_time = time.time()
                 logging.info("Sync graph enabled")
                 self.sample_delay()
+                logging.debug(f"Sync time: {time.time()-sync_time}")
                 self.signal_sync_ready.emit()
             
+            if self.module_receiver.is_noise_source_on and self.en_noise_var:
+                self.noise_var = np.var(self.module_receiver.iq_samples,1)
+                logging.debug(f"Noise variance: {tuple(self.noise_var)}")
+
             # Sample offset compensation request
             if self.en_sample_offset_sync:
                 self.module_receiver.set_sample_offsets(self.delay_log[:,-1])
@@ -199,8 +216,8 @@ class SignalProcessor(QtCore.QThread):
             
             # Record IQ samples
             if self.en_record:
-                np.save('hydra_samples.npy', self.module_receiver.iq_samples)
-
+                np.save('hydra_samples.npy', self.module_receiver.iq_samples)   
+                
 
             # Code to maintain sync
             '''if self.timed_sync and not self.en_sync:
