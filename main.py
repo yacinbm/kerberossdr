@@ -1,5 +1,6 @@
 from cmath import exp
 from re import L
+from tracemalloc import start
 from PyQt5.QtWidgets import QApplication, QMainWindow, QHBoxLayout, QGraphicsScene, QGraphicsView
 import pyqtgraph as pg
 from scipy.constants import speed_of_light
@@ -7,6 +8,11 @@ import numpy as np
 import logging
 from sys import argv
 import datetime
+
+# DELETE THIS INCLUDE
+from scipy.signal import find_peaks
+from sympy import symbols
+# END
 
 from _GUI.sdr_people_tracker_main_window import Ui_MainWindow
 from _receiver.hydra_receiver import ReceiverRTLSDR
@@ -37,8 +43,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.cal_display.addWidget(self.plotWidget_cal_data)
         self.cal_display.addWidget(self.plotWidget_cal_spectrum)
 
-        x = np.arange(1000)
-        y = np.zeros(1000)
+        x = np.arange(20)
+        y = np.zeros(20)
 
         self.cal_data_curve = self.plotWidget_cal_data.plot(x, y, clear=True, pen=(255,199,15))
         self.cal_spectrum_curve = self.plotWidget_cal_spectrum.plot(x, y, pen="r")
@@ -57,33 +63,30 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.tracker_pos_scene = QGraphicsScene()
         self.graphPosition.setScene(self.tracker_pos_scene)
         # Measurements plot
-        self.plotWidget_tracker_aoa = pg.plot()
+        self.plotWidget_tracker_spectrum = pg.plot()
         self.plotWidget_tracker_dist = pg.plot()
-        self.tracker_meas_display.addWidget(self.plotWidget_tracker_aoa)
+        self.tracker_meas_display.addWidget(self.plotWidget_tracker_spectrum)
         self.tracker_meas_display.addWidget(self.plotWidget_tracker_dist)
 
 
-        self.tracker_aoa_curve = self.plotWidget_tracker_aoa.plot(x,y, clear=True, pen=(255,199,15))
-        #self.tracker_dist_curve = self.plotWidget_tracker_dist.plot(x,y,clear=True, pen="r")
-        self.tracker_dist_hist = pg.ImageItem()
-        cm = pg.colormap.get("CET-L17")
-        cm.reverse()
-        self.tracker_dist_hist.setColorMap(cm)
-        self.tracker_dist_hist.setLevels([-50,50])
-        self.plotWidget_tracker_dist.addItem(self.tracker_dist_hist)
-        #self.tracker_dist_curve_2 = self.plotWidget_tracker_dist.plot(x,y, pen="g")
-        #self.tracker_dist_curve_3 = self.plotWidget_tracker_dist.plot(x,y, pen="b")
-        #self.tracker_dist_curve_4 = self.plotWidget_tracker_dist.plot(x,y, pen="y")
+        self.tracker_spectrum_curve_1 = self.plotWidget_tracker_spectrum.plot(x,y, pen="r")
+        self.tracker_spectrum_curve_2 = self.plotWidget_tracker_spectrum.plot(x,y, pen="g")
+        self.tracker_spectrum_peaks_curve = self.plotWidget_tracker_spectrum.plot(x,y, symbol="x", pen="r")
+        self.tracker_dist_curve_1 = self.plotWidget_tracker_dist.plot(x,y, pen="r")
+        self.tracker_dist_curve_2 = self.plotWidget_tracker_dist.plot(x,y, pen="g")
         
         
-        self.plotWidget_tracker_aoa.setTitle("Detected Angle of Arrival")
-        self.plotWidget_tracker_aoa.setLabel("left", "Power [dBm]")
-        self.plotWidget_tracker_aoa.setLabel("right", "Angle of arrival [deg]")
+        self.plotWidget_tracker_spectrum.setTitle("Channel 1 spectrum")
+        self.plotWidget_tracker_spectrum.setLabel("left", "Power")
         self.plotWidget_tracker_dist.setTitle("Detected Distance")
         self.plotWidget_tracker_dist.setLabel("left", "Distance")
+        self.plotWidget_tracker_dist.setYRange(0,3)
 
         # Tracker plot
         self.plotWidget_tracker_position = pg.plot()
+        self.plotWidget_tracker_position.setXRange(0,3)
+        self.plotWidget_tracker_position.setYRange(0,3)
+        self.tracker_position_curve = self.plotWidget_tracker_position.plot(x,y, clear=True, symbol="o")
         self.tracker_pos_scene.addWidget(self.plotWidget_tracker_position)
 
         # <---- GUI INIT 
@@ -91,7 +94,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Worker thread object declaration
         self.receiver = ReceiverRTLSDR()
         self.receiver.block_size = self.buffer_size
-        self.receiver.fs = 1.024e6
+        self.receiver.fs = 2.048e6
         self.receiver.center_f = 1700.04e6
         self.calibrator = Calibrator(receiver=self.receiver)
         self.tracker = Tracker(receiver=self.receiver)
@@ -115,10 +118,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.spinFilterBw.valueChanged.connect(self.update_filter_bw)
         self.spinFirTapSize.valueChanged.connect(self.update_fir_tap_size)
         self.btnStartTrack.clicked.connect(self.det_btn_clicked)
-        self.tracker.signal_spectrum_ready.connect(self.det_dist_plot)
+        self.btnCapBkgrnd.clicked.connect(self.det_cap_background)
+        self.tracker.signal_distance_ready.connect(self.det_dist_plot)
         self.tracker.signal_period.connect(self.det_period_time_update)
         self.tracker.signal_sync_ready.connect(self.det_sync_done)
-        self.tracker.signal_aoa_ready.connect(self.det_aoa_plot)
+        self.tracker.signal_spectrum_ready.connect(self.det_spectrum_plot)
 
         # Tracker initialization
         self.tracker.scan_step = 2559840
@@ -130,6 +134,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.tracker.en_sync = True
         self.tracker.en_sample_offset_sync = True
         self.tracker.en_calib_iq = True
+        self.tracker.en_save_samples = False
         
 
     # Callback function declaration
@@ -196,9 +201,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def cal_plot(self):
         logging.debug("Plotting cal data")
-        # Calibration
-        self.cal_spectrum_curve.setData(self.calibrator.spectrum[0,:], self.calibrator.spectrum[1,:])
         # Spectrum
+        self.cal_spectrum_curve.setData(self.calibrator.spectrum[0,:], self.calibrator.spectrum[1,:])
+        # Calibration Data
         self.cal_data_curve.setData(self.calibrator.calibration_data[0,:], self.calibrator.calibration_data[1,:])
 
     # === DETECTION TAB ===
@@ -208,13 +213,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def update_center_freq(self, value):
         self.tracker.en_estimate_aoa = False
         self.receiver.center_f = value*1e6
-        self.receiver.reconfigure_tuner(self.receiver.center_f, self.receiver.fs, self.receiver.receiver_gain)
+        self.receiver.reconfigure_tuner(self.receiver.center_f, self.receiver.fs, [0,0,0,0])
         self.receiver.switch_noise_source(1)
-        self.tracker.en_noise_meas = True
-        self.tracker.en_sync = True
-        self.tracker.en_sample_offset_sync = True
-        self.tracker.en_calib_iq = True
-        # TODO: Clear histogram
+        self.tracker.en_noise_meas = False
+        self.tracker.en_sync = False
+        self.tracker.en_sample_offset_sync = False
+        self.tracker.en_calib_iq = False
+
+    def update_backgrnd(self):
+        self.tracker.en_capture_background = True
 
     def update_filter_bw(self, value):
         self.receiver.fir_bw = value
@@ -223,6 +230,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def update_fir_tap_size(self, value):
         self.receiver.fir_size = value
         self.receiver.set_fir_coeffs(self.receiver.fir_size, self.receiver.fir_bw)
+
+    def det_cap_background(self):
+        # Capture the current spectrum as background
+        self.tracker.background_spectrum = np.copy(self.tracker.spectrum)
 
     def det_btn_clicked(self):
         if not self.tracker.isRunning():
@@ -238,18 +249,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.tracker.stop()
             logging.info("Tracker aborted")
 
-    def det_aoa_plot(self):
-        thetas = self.tracker.aoa_theta
-        result = self.tracker.aoa_MUSIC_res
-        result = np.divide(np.abs(result), np.max(np.abs(result))) # Normalize around maximum
-        result = 10*np.log10(result)
-        self.labelAOA.setText(f"{int(thetas[np.argmax(result)])}")
-        self.tracker_aoa_curve.setData(thetas, result)  
-    
+    def det_spectrum_plot(self):
+        binWidth = (self.receiver.fs/self.tracker.decimationFactor) / self.tracker.spectrum_sample_size
+        startIndx = self.tracker.spectrum.shape[1]//2
+        maxIndx = int(70e3 // binWidth)
+        peaks, _ = find_peaks(self.tracker.foreground_spectrum[0,0:maxIndx], height=10, prominence=10)
+        self.tracker_spectrum_curve_1.setData(self.tracker.spectrum[0,startIndx:maxIndx+startIndx], self.tracker.foreground_spectrum[0,0:maxIndx])
+        self.tracker_spectrum_curve_2.setData(self.tracker.spectrum[0,startIndx:maxIndx+startIndx], self.tracker.foreground_spectrum[1,0:maxIndx])
+        #self.tracker_spectrum_peaks_curve.setData(self.tracker.spectrum[0,peaks+startIndx], self.tracker.foreground_spectrum[0,peaks])
+
     def det_dist_plot(self):
-        self.tracker.distance_res = np.roll(self.tracker.distance_res,-1,0)
-        self.tracker.distance_res[-1:] = self.tracker.spectrum[1]
-        self.tracker_dist_hist.setImage(self.tracker.distance_res)
+        logging.info(f"Target at: ({self.tracker.target_coordonates[0]}, {self.tracker.target_coordonates[1]})")
+        self.tracker_dist_curve_1.setData(self.tracker.distances[0,:])
+        self.tracker_dist_curve_2.setData(self.tracker.distances[1,:])
+        # Plot the target coordonates
+        self.tracker_position_curve.setData([self.tracker.target_coordonates[0]], [self.tracker.target_coordonates[1]])
 
     def det_period_time_update(self, update_period):
         logging.info(f"Signal Period: {update_period}")

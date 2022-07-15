@@ -87,15 +87,17 @@ class ReceiverRTLSDR():
             self.is_noise_source_on = False
             
             # Data acquisition parameters
-            self.receiver_gain = [0,0,0,0]
-            self.center_f = 24e6
             self.channel_number = 4
             self.block_size = 0
+            self.block_number = 1 # Used to run FFT on bigger data than just 1 block
+            self.iq_samples = np.zeros((self.channel_number, self.block_size//2 * self.block_number), dtype=np.complex64)
+            self.receiver_gain = [0,0,0,0]
+            self.center_f = 24e6
             self.overdrive_detect_flag = False
 
             # IQ preprocessing parameters
             self.en_dc_compensation = False
-            self.fs = 1.024 * 10**6  # Sampling frequency
+            self.fs = 2.048 * 10**6  # Sampling frequency
             self.iq_corrections = np.array([1,1,1,1], dtype=np.complex64)  # Used for phase and amplitude correction
             self.fir_size = 0
             self.fir_bw = 1  # Normalized to sampling frequency 
@@ -116,6 +118,7 @@ class ReceiverRTLSDR():
        self.center_f = center_freq
        self.receiver_gain = gain
        self.fs = sample_rate
+       self.iq_samples = np.zeros((self.channel_number, self.block_size//2 * self.block_number), dtype=np.complex64)
        # Send new config to the control FIFO
        self.rec_control_fifo_descriptor.write(self.reconfig_tuner_byte)    
        self.rec_control_fifo_descriptor.write(pack("I", int(center_freq)))
@@ -154,7 +157,6 @@ class ReceiverRTLSDR():
         self.fir_size = fir_size
         
     def download_iq_samples(self):
-            self.iq_samples = np.zeros((self.channel_number, self.block_size//2), dtype=np.complex64)
             self.gc_fifo_descriptor.write(self.gate_trigger_byte)
             logging.debug("Python rec: Trigger written")
             read_size = self.block_size * self.channel_number
@@ -166,11 +168,13 @@ class ReceiverRTLSDR():
                 byte_data_np = np.frombuffer(byte_array_read, dtype='uint8', count=read_size)
             except Exception as e:
                 return
-
-            self.iq_samples.real = byte_data_np[0:self.channel_number*self.block_size:2].reshape(self.channel_number, self.block_size//2)
-            self.iq_samples.imag = byte_data_np[1:self.channel_number*self.block_size:2].reshape(self.channel_number ,self.block_size//2)
+            # Roll data to the right    
+            self.iq_samples = np.roll(self.iq_samples, self.block_size//2)
+            # Overwrite oldest data, now in lowest index
+            self.iq_samples[:,0:self.block_size//2].real = byte_data_np[0:self.channel_number*self.block_size:2].reshape(self.channel_number, self.block_size//2)
+            self.iq_samples[:,0:self.block_size//2].imag = byte_data_np[1:self.channel_number*self.block_size:2].reshape(self.channel_number ,self.block_size//2)
             self.iq_samples /= (255 / 2)
-            self.iq_samples -= (1 + 1j) 
+            self.iq_samples -= (1 + 1j)
             self.iq_preprocessing()
 
             logging.debug("IQ sample read ready")

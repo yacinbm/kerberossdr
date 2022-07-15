@@ -105,7 +105,7 @@ class SignalProcessor(QThread):
         
         # Processing parameters        
         self.test = None
-        self.spectrum_sample_size = 2**14
+        self.spectrum_sample_size = 2**20
         self.DOA_sample_size = 2**15 # Connect to GUI value??
         self.xcorr_sample_size = 2**18 #2**18
         self.spectrum = np.ones((self.channel_number+1,self.spectrum_sample_size), dtype=np.float32) # idx 0 are the frequencies and the rest are the results
@@ -142,11 +142,12 @@ class SignalProcessor(QThread):
 
             # Download samples
             self.module_receiver.download_iq_samples()
-
+            
+            self.spectrum_sample_size = self.module_receiver.iq_samples[0,:].size
             self.DOA_sample_size = self.module_receiver.iq_samples[0,:].size
             self.xcorr_sample_size = self.module_receiver.iq_samples[0,:].size
             self.xcorr = np.ones((self.channel_number-1,self.xcorr_sample_size*2), dtype=np.complex64) 
-            
+
             # Check overdrive
             if self.module_receiver.overdrive_detect_flag:
                 self.signal_overdrive.emit(1)
@@ -156,10 +157,10 @@ class SignalProcessor(QThread):
             
             # Display spectrum
             if self.en_spectrum:
-                self.spectrum[0, :] = np.fft.fftshift(np.fft.fftfreq(self.spectrum_sample_size, 1/self.fs))/10**6
+                self.spectrum[0, :] = np.fft.fftshift(np.fft.fftfreq(self.spectrum_sample_size, 1/self.fs))
 
                 for m in range(self.channel_number):
-                    self.spectrum[m+1,:] = 10*np.log10(np.fft.fftshift(np.abs(np.fft.fft(self.module_receiver.iq_samples[m, 0:self.spectrum_sample_size]))))
+                    self.spectrum[m+1,:] = np.fft.fft(self.module_receiver.iq_samples[m, :])
                 self.signal_spectrum_ready.emit()
             
             # Synchronization
